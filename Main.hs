@@ -1,4 +1,6 @@
 {-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module Main where
 
 
@@ -19,7 +21,7 @@ import           Telegram.Bot.Simple
 import           Telegram.Bot.Simple.UpdateParser (updateMessageText)
 
 type MyMap = HashMap (ChatId, MessageId) MessageId
-data Model = Model { messageIds :: TVar MyMap, mergeChatId :: ChatId }
+data Model = Model { messageIds :: TVar MyMap, mergeChatId :: ChatId, allowedChats :: [ChatId]}
 
 data Action
   = NoOp
@@ -29,27 +31,30 @@ data Action
 data BotConfig = BotConfig {
     botToken :: Token -- "BOT_TOKEN"
   , botMergeChatId :: ChatId -- "BOT_MERGE_CHAT_ID"
+  , botAllowedChats :: [ChatId] -- "BOT_ALLOWED_CHAT_IDS"
 } deriving (Generic, Show)
 
 instance Var Token where
   fromVar x = Just $ Token $ Text.pack x
 instance Var ChatId where
   fromVar x = ChatId <$> readMaybe x
+instance Var [ChatId] where
+  fromVar x = map ChatId <$> readMaybe x
 instance FromEnv BotConfig
 
-echoBot :: ChatId -> TVar MyMap -> BotApp Model Action
-echoBot mergechatid map = BotApp
-  { botInitialModel = Model { messageIds = map, mergeChatId = mergechatid}
+echoBot :: ChatId -> [ChatId] -> TVar MyMap -> BotApp Model Action
+echoBot mergechatid allowedchats map = BotApp
+  { botInitialModel = Model { messageIds = map, mergeChatId = mergechatid, allowedChats = allowedchats }
   , botAction = updateToAction
   , botHandler = handleAction
   , botJobs = []
   }
 
-goodChatId :: ChatId -> ChatId -> Bool
-goodChatId = (/=)
+goodChatId :: Model -> ChatId -> Bool
+goodChatId model chatId = elem chatId $ allowedChats model
 
 goodUpdate :: Model -> Maybe Message -> Bool
-goodUpdate model x = isJust x && goodChatId (mergeChatId model) (chatId $ messageChat $ fromJust x)
+goodUpdate model x = isJust x && goodChatId model (chatId $ messageChat $ fromJust x)
 
 updateToAction :: Update -> Model -> Maybe Action
 updateToAction update model
@@ -84,7 +89,7 @@ run :: BotConfig -> IO ()
 run config = do
   env <- defaultTelegramClientEnv (botToken config)
   res <- newTVarIO HashMap.empty
-  startBot_ (conversationBot updateChatId $ echoBot (botMergeChatId config) res) env
+  startBot_ (conversationBot updateChatId $ echoBot (botMergeChatId config) (botAllowedChats config) res) env
 
 main :: IO ()
 main = do
