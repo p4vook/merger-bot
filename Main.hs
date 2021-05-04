@@ -81,9 +81,12 @@ handleAction action model = case action of
     ids <- liftIO $ readTVarIO (messageIds model)
     let toEdit = HashMap.lookup (chatId $ messageChat msg, messageMessageId msg) ids
     case toEdit of
-        Just id -> liftClientM $ deleteMessage (mergeChatId model) id
-        Nothing -> undefined
-    return $ Fwd msg
+        Just id -> do
+          liftClientM $ deleteMessage (mergeChatId model) id
+          return $ Fwd msg
+        Nothing -> do
+          liftClientM $ liftIO $ putStrLn "Unknown message was edited"
+          return NoOp
 
 run :: BotConfig -> IO ()
 run config = do
