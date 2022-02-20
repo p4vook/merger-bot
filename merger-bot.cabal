@@ -22,7 +22,7 @@ executable merger-bot
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.13 && <4.14,
-                       telegram-bot-simple >= 0.3.3,
+                       telegram-bot-simple >= 0.4,
                        unordered-containers,
                        stm,
                        transformers,
